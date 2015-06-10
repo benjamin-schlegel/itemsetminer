@@ -1,0 +1,12 @@
+# Ignore other unneeded files.
+*.swp
+*~
+
+# Ignore generated makefiles and 
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+
+# Binaries
+tools/ascii2bin

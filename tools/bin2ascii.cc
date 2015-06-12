@@ -54,7 +54,10 @@ int main(int argc, char *argv[])
 	}
 	
 	// replace the extension
-	strncpy(opath, ipath, file_ext - ipath);
+	strcpy(opath, ipath);
+	if(file_ext == NULL) {
+		*file_ext = '\0';
+	}
 	strcat(opath, ".dat");
 	
 	// input and output file cannot be the same at this time

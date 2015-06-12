@@ -46,13 +46,10 @@ int main(int argc, char *argv[])
 	char   *file_ext  = strrchr(ipath, '.');
 	size_t  ipath_len = strlen(ipath); 
 	char   *opath     = new char[ipath_len + 5];
+
+	strcpy(opath, ipath);
 	if(file_ext == NULL) {
-		// the filename has no file extension
-		strcpy(opath, ipath);
-	}
-	else {
-		// replace the extension
-		strncpy(opath, ipath, file_ext - ipath);
+		*file_ext = '\0';
 	}
 	strcat(opath, ".bin");
 	

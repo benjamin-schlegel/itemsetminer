@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cassert>
+#include <filemapper.h>
 
 using namespace std;
 
@@ -59,21 +60,27 @@ int main(int argc, char *argv[])
 	// input and output file cannot be the same at this time
 	assert(strcmp(ipath, opath));
 	
-	FILE* input;
-	int a;
-	int b;
-	input = fopen(ipath,"r");
-	if(input == NULL) {
-		cerr << "Could not open input file: " << argv[1] << endl;
-		exit(-1);
-	}
-
+	// map the input file into memory
+	size_t input_bytes;
+	int *file_mem = (int*) FileMapper::map_input(ipath, &input_bytes);
+	
 	FILE* output;
 	output = fopen(opath,"wb");
 	
-	// TODO
+	int *cur_trans = file_mem;
+	while((char*)cur_trans < (char*)file_mem + input_bytes) {
+		int ta_len = cur_trans[0];
+		// print the transaction
+		for(int i = 1; i <= ta_len; i++) {
+			fprintf(output, "%d ", cur_trans[i]);
+		}
+		fprintf(output, "\n");
+		// goto the next transaction
+		cur_trans += ta_len + 1;
+	}
 	
-	fclose(input);
+	FileMapper::unmap_input(file_mem, input_bytes);
+	
 	fclose(output);
 	delete[] opath;
 	

@@ -22,57 +22,110 @@
 /// @author Benjamin Schlegel
 ///
 
-#include <cstdio>
+#include <iostream>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <cassert>
+#include <filemapper.h>
 
-#define MAX_LINE_LENGTH	256 * 1024 * 1024
-#define MAX_INT_LENGTH 256 * 1024 * 1024
+using namespace std;
+
+#define MAX_TA_LENGTH 256 * 1024 * 1024
 
 int main(int argc, char *argv[])
 {
-	char filename[200];
-	
+	// check the arguments
 	if(argc != 2) {
-		printf("Usage: %s <file>\n",argv[0]);
-		abort();
+		cerr << "Usage: " << argv[0] << " <file>\n" << endl;
+		exit(-1);
 	}
 	
-	strcpy(filename,argv[1]);
-	strcat(filename,"_TwoInt");
-	
-	FILE* input;
-	int a;
-	int b;
-	input = fopen(argv[1],"r");
-	if(input == NULL) {
-		fprintf(stderr,"Could not open input file %s!\n",argv[1]);
-		abort();
+	// build the output name by replacing the extension of the input file
+  char   *ipath     = argv[1];
+	char   *file_ext  = strrchr(ipath, '.');
+	size_t  ipath_len = strlen(ipath); 
+	char   *opath     = new char[ipath_len + 5];
+	if(file_ext == NULL) {
+		// the filename has no file extension
+		strcpy(opath, ipath);
 	}
-
+	else {
+		// replace the extension
+		strncpy(opath, ipath, file_ext - ipath);
+	}
+	strcat(opath, ".bin");
+	
+	if(strcmp(ipath, opath) == 0) {
+		cerr << "Input file must not have '.bin' extension!" << endl; 
+		exit(-1);
+	}
+	
+	// map the input file into memory
+	size_t input_bytes;
+	unsigned char *file_mem = (unsigned char*) FileMapper::map_input(ipath, &input_bytes);
+	unsigned char *file_mem_cur = file_mem;
+	unsigned char *file_mem_end = file_mem + input_bytes;
+	
 	FILE* output;
-	output = fopen(filename,"wb");
+	output = fopen(opath,"wb");
 	
-	int ta = 1;
-
-	char * str = (char*)malloc(MAX_LINE_LENGTH);
-	char * line;
-	int * writeline = (int*)malloc(MAX_INT_LENGTH * sizeof(int));
-
-	while(line = fgets(str,MAX_LINE_LENGTH, input)) {
-		int size = 0;
-		assert(line[MAX_LINE_LENGTH-2] == 0x0);
-		char * pch = strtok(line,"\t "); 
-		do {
-			writeline[++size] = atoi(pch);
-			pch = strtok(NULL,"\t ");
-			assert(size < MAX_INT_LENGTH - 1);
-		}
-		while(pch != NULL && *pch != '\n' && *pch != '\0');
-		writeline[0] = size;
-		fwrite(writeline,sizeof(int)*(size+1),1,output);
+	// check if the file contains at least one transaction
+	if (file_mem_cur >= file_mem_end) {
+		exit(0);
 	}
-	fclose(input);
+	
+	int *ta = new int[MAX_TA_LENGTH];
+	unsigned length = 0;
+	
+	// parse the transactions
+	while (true) {
+		if(*file_mem_cur >= '0') {
+			unsigned value = 0;
+			do {
+				value *= 10;
+				value += *file_mem_cur - '0';
+				file_mem_cur++;
+			} 
+			while (*file_mem_cur >= '0' && file_mem_cur < file_mem_end);
+			// decoded the value
+			length++;
+			ta[length] = value;
+			assert(length < MAX_TA_LENGTH);
+		}
+		else if(*file_mem_cur == '\n') {
+			file_mem_cur++;
+			if(length) {
+			  // write the transaction to the file
+				ta[0] = length;
+			  fwrite(ta, sizeof(int), length + 1, output);
+				// reset the length
+				length = 0;
+			}
+		}
+		else {
+			// go over the separators
+			assert(*file_mem_cur == ' ');
+			file_mem_cur++;
+		}
+		assert(file_mem_cur <= file_mem_end);
+		// check if the end of the file is reached
+		if(file_mem_cur == file_mem_end) {
+			if(length) {
+				// write the transaction to the file
+				ta[0] = length;
+				fwrite(ta, sizeof(int), length + 1, output);
+			}
+			break;
+		}
+	}
+	
+	// unmap the input file
+	FileMapper::unmap_input(file_mem, input_bytes);
+	
 	fclose(output);
+	delete[] opath;
+	delete[] ta;
+	
+	return 0;
 }

@@ -31,9 +31,6 @@
 
 using namespace std;
 
-#define MAX_LINE_LENGTH	256 * 1024 * 1024
-#define MAX_INT_LENGTH 256 * 1024 * 1024
-
 int main(int argc, char *argv[])
 {
 	// check the arguments
@@ -44,20 +41,17 @@ int main(int argc, char *argv[])
 	
 	// build the output name by replacing the extension of the input file
   char   *ipath     = argv[1];
-	char   *file_ext  = strrchr(ipath, '.');
 	size_t  ipath_len = strlen(ipath); 
 	char   *opath     = new char[ipath_len + 5];
+	strcpy(opath, ipath);
 	
+	// replace the extension
+	char   *file_ext  = strrchr(opath, '.');
 	if(file_ext == NULL || strcmp(file_ext, ".bin")) {
 		cerr << "Input file has to have the '.bin' extension!" << endl;
 		exit(-1);
 	}
-	
-	// replace the extension
-	strcpy(opath, ipath);
-	if(file_ext == NULL) {
-		*file_ext = '\0';
-	}
+	*file_ext = '\0';
 	strcat(opath, ".dat");
 	
 	// input and output file cannot be the same at this time

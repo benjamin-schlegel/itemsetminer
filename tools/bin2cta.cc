@@ -1,4 +1,4 @@
-// Copyright (c) 2009 Benjamin Schlegel
+// Copyright (c) 2015 Benjamin Schlegel
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,11 +27,25 @@
 #include <cstdio>
 #include <cstring>
 #include <cassert>
+#include <algorithm>
 #include <filemapper.h>
 
 using namespace std;
 
 #define MAX_TA_LENGTH 256 * 1024 * 1024
+
+/**
+ * \brief Compresses a transaction including the length field
+ * 
+ * \param ta Transaction being compressed - used to return the compressed transaction
+ * \param length Length of the transaction including the length field
+ * 
+ * \return Number of bytes of the compressed transaction
+ */
+int compress_ta(int *ta, int length)
+{
+	return sizeof(int) * (length + 1);
+}
 
 int main(int argc, char *argv[])
 {
@@ -47,82 +61,46 @@ int main(int argc, char *argv[])
 	char   *opath     = new char[ipath_len + 5];
 	strcpy(opath, ipath);
 	
+	// replace the extension
 	char   *file_ext  = strrchr(opath, '.');
-	if(file_ext != NULL) {
-		*file_ext = '\0';
-	}
-	strcat(opath, ".bin");
-	
-	if(strcmp(ipath, opath) == 0) {
-		cerr << "Input file must not have '.bin' extension!" << endl; 
+	if(file_ext == NULL || strcmp(file_ext, ".bin")) {
+		cerr << "Input file has to have the '.bin' extension!" << endl;
 		exit(-1);
 	}
+	*file_ext = '\0';
+	strcat(opath, ".cta");
+	
+	// input and output file cannot be the same at this time
+	assert(strcmp(ipath, opath));
 	
 	// map the input file into memory
 	size_t input_bytes;
-	unsigned char *file_mem = (unsigned char*) FileMapper::map_input(ipath, &input_bytes);
-	unsigned char *file_mem_cur = file_mem;
-	unsigned char *file_mem_end = file_mem + input_bytes;
+	int *file_mem = (int*) FileMapper::map_input(ipath, &input_bytes);
 	
 	FILE* output;
 	output = fopen(opath,"wb");
 	
-	// check if the file contains at least one transaction
-	if (file_mem_cur >= file_mem_end) {
-		exit(0);
-	}
-	
 	int *ta = new int[MAX_TA_LENGTH];
-	unsigned length = 0;
 	
-	// parse the transactions
-	while (true) {
-		if(*file_mem_cur >= '0') {
-			unsigned value = 0;
-			do {
-				value *= 10;
-				value += *file_mem_cur - '0';
-				file_mem_cur++;
-			} 
-			while (*file_mem_cur >= '0' && file_mem_cur < file_mem_end);
-			// decoded the value
-			length++;
-			ta[length] = value;
-			assert(length < MAX_TA_LENGTH);
-		}
-		else if(*file_mem_cur == '\n') {
-			file_mem_cur++;
-			if(length) {
-			  // write the transaction to the file
-				ta[0] = length;
-			  fwrite(ta, sizeof(int), length + 1, output);
-				// reset the length
-				length = 0;
-			}
-		}
-		else {
-			// go over the separators
-			assert(*file_mem_cur == ' ');
-			file_mem_cur++;
-		}
-		assert(file_mem_cur <= file_mem_end);
-		// check if the end of the file is reached
-		if(file_mem_cur == file_mem_end) {
-			if(length) {
-				// write the transaction to the file
-				ta[0] = length;
-				fwrite(ta, sizeof(int), length + 1, output);
-			}
-			break;
-		}
+	int *cur_trans = file_mem;
+	while((char*)cur_trans < (char*)file_mem + input_bytes) {
+		int ta_len = cur_trans[0];
+		// copy the transaction (should not sort the memory mapped file)
+		memcpy(ta, cur_trans, (ta_len + 1) * sizeof(int));
+		// sort the transaction
+		sort(ta + 1, ta + ta_len + 1);
+		// write the data compressed
+		int bytes = compress_ta(ta, ta_len);
+		// write the compressed transaction into the file
+		fwrite(ta, sizeof(char), bytes, output);
+		// goto the next transaction
+		cur_trans += ta_len + 1;
 	}
 	
-	// unmap the input file
 	FileMapper::unmap_input(file_mem, input_bytes);
 	
 	fclose(output);
 	delete[] opath;
-	delete[] ta;
 	
 	return 0;
 }

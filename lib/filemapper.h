@@ -22,6 +22,9 @@
 /// @author Benjamin Schlegel
 ///
 
+#ifndef FILEMAPPER
+#define FILEMAPPER
+
 #include <cstddef>
 
 class FileMapper {
@@ -43,3 +46,5 @@ public:
 	 */
 	static void unmap_input(void *file_mem, size_t file_size);
 };
+
+#endif // FILEMAPPER

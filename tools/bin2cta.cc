@@ -44,6 +44,24 @@ using namespace std;
  */
 int compress_ta(int *ta, int length)
 {
+	// check that all values in the transaction are sorted and distinct
+	for(int i = 1; i < length; i++) {
+		assert(ta[i] < ta[i + 1]);
+	}
+	// apply delta compression to the data values
+	int prev = 0;
+	for(int i = 1 ; i <= length ; i++) {
+		int v = ta[i];
+		ta[i] = v - prev;
+		prev = v + 1;
+	}
+	// apply null suppression
+	unsigned char *cta = (unsigned char*) ta;
+	for(int i = 0 ; i <= length ; i++) {
+		int v = ta[i];
+		int zero_bytes = __builtin_clz(v|1) >> 3;
+		assert(zero_bytes >= 0 && zero_bytes < 4);
+	}
 	return sizeof(int) * (length + 1);
 }
 
@@ -58,7 +76,7 @@ int main(int argc, char *argv[])
 	// build the output name by replacing the extension of the input file
   char   *ipath     = argv[1];
 	size_t  ipath_len = strlen(ipath); 
-	char   *opath     = new char[ipath_len + 5];
+	char   *opath     = new char[ipath_len + 1];
 	strcpy(opath, ipath);
 	
 	// replace the extension

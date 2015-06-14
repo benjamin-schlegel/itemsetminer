@@ -27,22 +27,52 @@
 #include <cstdio>
 #include <cstring>
 #include <cassert>
+#include <unistd.h>
 #include <filemapper.h>
+#include <cfile_batch.h>
 
 using namespace std;
 
 #define MAX_TA_LENGTH 256 * 1024 * 1024
 
+void print_help(char *cmd) {
+	cout << "Usage: " << cmd << " <file> [-u] [-h]" << endl;
+	cout << endl;
+	cout << "\t-u Generate an uncompressed '.bin' file" << endl;
+	cout << "\t   Standard is a compressed '.cta' file" << endl;
+	cout << "\t-h Print this help" << endl;
+	exit(0);
+}
+
 int main(int argc, char *argv[])
 {
 	// check the arguments
-	if(argc != 2) {
-		cerr << "Usage: " << argv[0] << " <file>\n" << endl;
-		exit(-1);
+	if(argc < 2) {
+		print_help(argv[0]);
+	}
+	
+	/* check the set flags after the path */ 
+	bool compressed = true;
+	if(argc > 2) {
+		int c;
+		
+		while ((c = getopt(argc - 1, argv + 1, "uh")) != -1) {
+			switch(c) {
+				case 'u':
+					compressed = false;
+					break;
+				case 'h':
+					print_help(argv[0]);
+					break;
+				default:
+					print_help(argv[0]);
+					break;
+			}
+		}
 	}
 	
 	// build the output name by replacing the extension of the input file
-  char   *ipath     = argv[1];
+	char   *ipath     = argv[1];
 	size_t  ipath_len = strlen(ipath); 
 	char   *opath     = new char[ipath_len + 5];
 	strcpy(opath, ipath);
@@ -51,7 +81,12 @@ int main(int argc, char *argv[])
 	if(file_ext != NULL) {
 		*file_ext = '\0';
 	}
-	strcat(opath, ".bin");
+	if(compressed) {
+		strcat(opath, ".cta");
+	}
+	else {
+		strcat(opath, ".bin");
+	}
 	
 	if(strcmp(ipath, opath) == 0) {
 		cerr << "Input file must not have '.bin' extension!" << endl; 
@@ -64,16 +99,20 @@ int main(int argc, char *argv[])
 	unsigned char *file_mem_cur = file_mem;
 	unsigned char *file_mem_end = file_mem + input_bytes;
 	
-	FILE* output;
-	output = fopen(opath,"wb");
-	
 	// check if the file contains at least one transaction
 	if (file_mem_cur >= file_mem_end) {
 		exit(0);
 	}
 	
-	int *ta = new int[MAX_TA_LENGTH];
-	unsigned length = 0;
+	Ta<unsigned> *ta = (Ta<unsigned>*) new unsigned[MAX_TA_LENGTH];
+	FileBatch<unsigned> *file_batch;
+	if(compressed) {
+		file_batch = new CFileBatch<unsigned>(opath);
+	}
+	else {
+		file_batch = new FileBatch<unsigned>(opath);
+	}
+	unsigned n_items = 0;
 	
 	// parse the transactions
 	while (true) {
@@ -86,19 +125,14 @@ int main(int argc, char *argv[])
 			} 
 			while (*file_mem_cur >= '0' && file_mem_cur < file_mem_end);
 			// decoded the value
-			length++;
-			ta[length] = value;
-			assert(length < MAX_TA_LENGTH);
+			ta->items_[n_items++] = value;
+			assert(n_items < MAX_TA_LENGTH - 1);
 		}
 		else if(*file_mem_cur == '\n') {
 			file_mem_cur++;
-			if(length) {
-			  // write the transaction to the file
-				ta[0] = length;
-			  fwrite(ta, sizeof(int), length + 1, output);
-				// reset the length
-				length = 0;
-			}
+			ta->n_items_ = n_items;
+			file_batch->add_ta(ta);
+			n_items = 0;
 		}
 		else {
 			// go over the separators
@@ -108,19 +142,21 @@ int main(int argc, char *argv[])
 		assert(file_mem_cur <= file_mem_end);
 		// check if the end of the file is reached
 		if(file_mem_cur == file_mem_end) {
-			if(length) {
+			if(n_items) {
 				// write the transaction to the file
-				ta[0] = length;
-				fwrite(ta, sizeof(int), length + 1, output);
+				ta->n_items_ = n_items;
+				file_batch->add_ta(ta);
 			}
 			break;
 		}
 	}
+	// flush the last batch out
+	file_batch->write();
 	
 	// unmap the input file
 	FileMapper::unmap_input(file_mem, input_bytes);
 	
-	fclose(output);
+	delete file_batch;
 	delete[] opath;
 	delete[] ta;
 	

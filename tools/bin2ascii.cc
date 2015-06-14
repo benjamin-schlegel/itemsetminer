@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 	// build the output name by replacing the extension of the input file
   char   *ipath     = argv[1];
 	size_t  ipath_len = strlen(ipath); 
-	char   *opath     = new char[ipath_len + 5];
+	char   *opath     = new char[ipath_len + 1];
 	strcpy(opath, ipath);
 	
 	// replace the extension
